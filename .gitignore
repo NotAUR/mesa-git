@@ -1,5 +1,7 @@
-mesa-git-*
-mesa
-pkg
-src
+/mesa-git-*
+/mesa
+/pkg
+/src
+/*.tar.zst
+/*.tar.gz
 
