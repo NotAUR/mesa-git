@@ -9,10 +9,11 @@
 # Contributor: Thomas Dziedzic < gostrc at gmail >
 # Contributor: Antti "Tera" Oja <antti.bofh@gmail.com>
 # Contributor: Diego Jose <diegoxter1006@gmail.com>
+# Contributor: Victor Queiroz <victorcqueirozg@gmail.com>
 
 pkgname=mesa-git
 pkgdesc="an open-source implementation of the OpenGL specification, git version"
-pkgver=25.1.0_devel.203584.b74a6e05bd6.d41d8cd
+pkgver=25.1.0_devel.203690.7a01953a396.d41d8cd
 pkgrel=1
 arch=('x86_64')
 makedepends=(
@@ -58,7 +59,9 @@ depends=(
     'python'
     'xcb-util-keysyms'
 )
-optdepends=('opengl-man-pages: for the OpenGL API man pages')
+optdepends=(
+    'opengl-man-pages: for the OpenGL API man pages'
+)
 provides=(
     'vulkan-mesa-layers'
     'opencl-driver'
@@ -253,55 +256,99 @@ prepare() {
 build() {
     local mesa_build_options
     mesa_build_options=(
+        'legacy-x11=dri2'
+        'shader-cache=enabled'
+        'spirv-to-dxil=false'
+
+        # Android options
+        #
+        # Enable strict Android compliance. Disabling may cause CTS failures or other problems, but allows drivers to expose capabilities that are normally hidden. Default: true
         'android-libbacktrace=disabled'
+        'android-strict=false'
+        'android-stub=false'
+
+        # LLVM
+        #
+        # AMD
+        'amdgpu-virtio=false'
+        'amd-use-llvm=false'
+        #
+        # General
+        'llvm=enabled'
+        'draw-use-llvm=true'
+        'shared-llvm=enabled'
+
+        # Binary options
+        'shared-glapi=enabled'
+        'split-debug=disabled'
+
         'b_ndebug=true'
-        'b_lto=false'
-        'egl=enabled'
-        'gallium-drivers=i915,virgl,svga,zink,d3d12,llvmpipe,softpipe'
-        'gallium-extra-hud=true'
-        'gallium-nine=true'
-        'gallium-opencl=icd'
-        'gallium-rusticl-enable-drivers=auto'
-        'gallium-rusticl=true'
-        #     "gallium-rusticl=${_rusticl}"
+        'b_lto=true'
+        'freedreno-kmds=msm,kgsl,virtio,wsl'
+
+        # Vulkan options
+        'vulkan-drivers=intel,intel_hasvk,swrast,virtio,gfxstream,panfrost,asahi'
+        # 'vulkan-drivers=auto'
+        'vulkan-layers=vram-report-limit,screenshot,device-select,intel-nullhw,overlay'
+        'xmlconfig=enabled'
+        'xlib-lease=enabled'
+        'vmware-mks-stats=true'
+
+        # Gallium options
+        # gallium-drivers=auto
+        'gallium-drivers=iris,i915,zink,virgl,svga,panfrost,llvmpipe,softpipe'
+        #         'gallium-drivers=iris,i915,zink,virgl,svga,freedreno,d3d12,llvmpipe,softpipe,panfrost'
         'gallium-va=enabled'
+        'gallium-d3d10umd=false'
         'gallium-vdpau=enabled'
+        'gallium-extra-hud=false'
+        'gallium-nine=true'
+        'gallium-opencl=disabled'
+        'power8=disabled'
+        'gallium-rusticl=false'
         'gallium-xa=enabled'
         'gbm=enabled'
-        'gles1=enabled'
-        'gles2=enabled'
         'glvnd=enabled'
-        'glx=auto'
+        'sse2=true'
+        'teflon=true'
+        'precomp-compiler=auto'
         'html-docs=disabled'
         'intel-bvh-grl=false'
         'build-tests=false'
-        'intel-clc=enabled'
+        #         'intel-clc=enabled'
         'libunwind=enabled'
-        'llvm=enabled'
         'lmsensors=enabled'
         'microsoft-clc=disabled'
         'osmesa=true'
         'platforms=wayland,x11'
-        'shared-glapi=enabled'
         'valgrind=disabled'
-        'draw-use-llvm=true'
-        'intel-rt=disabled'
+        'intel-rt=enabled'
         'video-codecs=all'
-        'vulkan-drivers=intel,intel_hasvk,swrast,virtio'
-        'vulkan-layers=device-select,intel-nullhw,overlay'
-        'tools=[]'
+        'tools=glsl,panfrost,intel-ui'
         'zstd=enabled'
-        'buildtype=plain'
+        'buildtype=release'
         'prefix=/usr'
         'sysconfdir=/etc'
-        'legacy-x11=dri2'
+
+        # OpenGL
+        'opengl=true'
+        'gles1=enabled'
+        'gles2=enabled'
+        #
+        # GLX
+        'glx=auto'
+        'glx-direct=true'
+        #
+        # EGL
+        'egl=enabled'
+        'egl-native-platform=auto'
     )
 
     local meson_options
     meson_options=()
 
     for opt in "${mesa_build_options[@]}"; do
-        meson_options+=("-D$opt")
+        meson_options+=("-D" "$opt")
     done
 
     meson_options+=(
@@ -310,8 +357,8 @@ build() {
     )
 
     # Build only minimal debug info to reduce size
-    CFLAGS="${CFLAGS} -g1"
-    CXXFLAGS="${CXXFLAGS} -g1"
+    #     CFLAGS="${CFLAGS} -g1"
+    #     CXXFLAGS="${CXXFLAGS} -g1"
 
     meson setup mesa _build "${meson_options[@]}"
     meson configure --no-pager _build
@@ -321,10 +368,24 @@ build() {
 package() {
     DESTDIR="${pkgdir}" ninja $NINJAFLAGS -C _build install
 
-    # remove script file from /usr/bin
-    # https://gitlab.freedesktop.org/mesa/mesa/issues/2230
-    rm "${pkgdir}/usr/bin/mesa-overlay-control.py"
-    rmdir "${pkgdir}/usr/bin"
+    #     local delete_executable_file_list
+    #     delete_executable_file_list=(
+    #         'spirv2dxil'
+    #         'mesa-screenshot-control.py'
+    #         # https://gitlab.freedesktop.org/mesa/mesa/issues/2230
+    #         'mesa-overlay-control.py'
+    #     )
+    #
+    #     # remove script file from /usr/bin
+    #     for file in "${delete_executable_file_list[@]}"; do
+    #         if [ ! -f "${pkgdir}/usr/bin/${file}" ]; then
+    #             printf "File %s does not exist\n" "${file}" >&2
+    #             continue
+    #         fi
+    #
+    #         rm -v "${pkgdir}/usr/bin/${file}"
+    #     done
+    #     rmdir "${pkgdir}/usr/bin"
 
     # indirect rendering
     ln -s /usr/lib/libGLX_mesa.so.0 "${pkgdir}/usr/lib/libGLX_indirect.so.0"
